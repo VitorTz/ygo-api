@@ -1,8 +1,6 @@
-from multiprocessing.pool import ThreadPool
 from abc import ABC, abstractmethod
 from botocore.config import Config
 from dotenv import load_dotenv
-from random import randint
 from pathlib import Path
 import boto3
 import uuid

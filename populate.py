@@ -1,29 +1,22 @@
-import json
+from src.util import download_image, delete_file, load_ygoprodeck_data
+from multiprocessing.pool import ThreadPool
 from psycopg import Connection, Cursor
-from src.db import db_migrate, db_instance
-from src.util import download_image, delete_file
+from threading import Lock
 from pathlib import Path
 from src.s3 import YgoS3
-from multiprocessing.pool import ThreadPool
-from threading import Lock
+from src import db
 
 
-data: list[dict] = None
+data: list[dict] = load_ygoprodeck_data()
 conn: Connection = None
 cur: Cursor = None
 lock = Lock()
 
 
-def load_data() -> None:
-    global data
-    with open("res/data.json") as file:
-        data = json.load(file)
-
-
 def init_db() -> None:
     global conn, cur
-    db_migrate()
-    conn, cur = db_instance()
+    db.db_migrate()
+    conn, cur = db.db_instance()
 
 
 def close_db() -> None:
@@ -37,9 +30,33 @@ def card_exists(card_id: int) -> bool:
     return r is not None
 
 
+def show_all(table: str) -> None:
+    cur.execute(f"SELECT * FROM {table};")
+    for i in cur.fetchall():
+        print(i)
+
+
+def count(table: str) -> int:
+    cur.execute(f"SELECT count(*) as total FROM {table};")
+    r = cur.fetchone()
+    if r: return r['total']
+    return 0
+
+
+def update_archetypes(archetypes: set[str]) -> None:
+    print("[UPDATING ARCHETYPES]")
+    for archetype in archetypes:
+        if not db.db_enum_value_exists(cur, 'archetype_enum', archetype):
+            db.db_add_enum_value(conn, cur, 'archetype_enum', archetype)
+
+
 def populate_cards() -> None:
+    print("[POPULATING CARDS]")
+    archetypes: set[str] = set()
     params = []
     for card in data:
+        if card.get("archetype"):
+            archetypes.add(card['archetype'])
         try:
             card_id: int = card['id']
             name: str = card['name'].strip()
@@ -83,6 +100,9 @@ def populate_cards() -> None:
             print(f"[EXCEPTION populate_cards] | {e}")
             print(card)
             return
+    
+    update_archetypes(archetypes)
+
     try:
         cur.executemany(
             """
@@ -103,9 +123,21 @@ def populate_cards() -> None:
                 )
                 VALUES 
                     (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT 
+                ON CONFLICT
                     (card_id)
-                DO NOTHING;
+                DO UPDATE SET
+                    name = EXCLUDED.name,
+                    descr = EXCLUDED.descr,
+                    pend_descr = EXCLUDED.pend_descr,
+                    monster_descr = EXCLUDED.monster_descr,
+                    attack = EXCLUDED.attack,
+                    defence = EXCLUDED.defence,
+                    level = EXCLUDED.level,
+                    archetype = EXCLUDED.archetype,
+                    attribute = EXCLUDED.attribute,
+                    frametype = EXCLUDED.frametype,
+                    race = EXCLUDED.race,
+                    type = EXCLUDED.type;
             """,
             params
         )
@@ -123,12 +155,15 @@ def show_all_cards() -> None:
 
     
 def populate_images() -> None:
+    print("[POPULATING IMAGES]")
     Path("tmp").mkdir(exist_ok=True)
     s3 = YgoS3()
     cur.execute("SELECT card_id FROM card_images;")
     card_ids = {i['card_id'] for i in cur.fetchall()}
-    
-    for card in data:
+    total = len(card_ids)
+
+    def populate(card: dict) -> None:
+        nonlocal total
         images: list[dict] = card.get('card_images')
         if not images:  return
 
@@ -179,28 +214,251 @@ def populate_images() -> None:
                         DO NOTHING;    
                     """,
                     (card_id, image_url, image_url_cropped, image_url_small)
-                )            
+                )
                 conn.commit()
-                print(f"[ADD CARD {card['name']}]")
+                print(f"[ADD CARD [{total}] {card['name']}]")
+                lock.acquire()
+                total += 1
+                lock.release()
             except Exception as e:
                 print(f"[EXCEPTION populate_images] | {e}")
                 conn.rollback()
                 return
-        
+            
+    with ThreadPool(4) as pool:
+        pool.map(populate, data)
+
+
+def populate_set_rarity() -> None:
+    print("[POPULATING SET_RARITY]")
+    rarity: set[tuple[str, str]] = set()
+    params = []
+    for card in data:
+        card_sets: list[dict] = card.get("card_sets")
+        if not card_sets: continue
+        for s in card_sets:
+            k = (s['set_rarity'], s['set_rarity_code'])
+            if k not in rarity:
+                rarity.add(k)
+                params.append(k)
+
+    try:
+        cur.executemany(
+            """
+                INSERT INTO set_rarity (
+                    name,
+                    code
+                )
+                VALUES
+                    (%s, %s)
+                ON CONFLICT
+                    (name)
+                DO NOTHING;
+            """,
+            (params)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_set_rarity] | {e}")
+        conn.rollback()
+
 
 def populate_sets() -> None:
-    pass
+    print("[POPULATING SETS]")
+    rarity: dict[str, int] = {}
+    cur.execute("SELECT name, set_rarity_id FROM set_rarity;")
+    for r in cur.fetchall():
+        rarity[r['name']] = r['set_rarity_id']
+
+    params_card_sets: set[tuple[str, str, str, int]] = set()
+    params_cards_in_sets = []
+    for card in data:
+        card_id = card['id']
+        card_sets: list[dict] = card.get("card_sets")
+        if not card_sets: continue
+        for s in card_sets:
+            params_card_sets.add((
+                s['set_code'],
+                s['set_name'],
+                rarity[s['set_rarity']],
+                float(s.get('set_price', 0)) * 100
+            ))
+            params_cards_in_sets.append((
+                card_id,
+                s['set_code']
+            ))
+
+    params_card_sets: list[tuple] = [x for x in params_card_sets]
+
+    try:
+        cur.executemany(
+            """
+                INSERT INTO card_sets (
+                    card_set_code,
+                    name,
+                    set_rarity_id,
+                    price
+                )
+                VALUES 
+                    (%s, %s, %s, %s)
+                ON CONFLICT
+                    (card_set_code)
+                DO NOTHING;
+            """,
+            (params_card_sets)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_sets params_card_sets] {e}")
+        conn.rollback()
+
+    try:
+        cur.executemany(
+            """
+                INSERT INTO cards_in_sets (
+                    card_id,
+                    card_set_code
+                )
+                VALUES
+                    (%s, %s)
+                ON CONFLICT
+                    (card_id, card_set_code)
+                DO NOTHING;
+            """,
+            (params_cards_in_sets)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_sets params_cards_in_sets] {e}")
+        conn.rollback()
+
+def populate_card_prices() -> None:
+    print("[POPULATING CARD PRICES]")
+    params = []
+    for card in data:
+        card_id: int = card['id']
+        card_prices: list[dict] = card.get("card_prices")
+        if not card_prices: continue
+        try:
+            params.append((
+                card_id,
+                float(card_prices[0].get("amazon_price", 0)) * 100,
+                float(card_prices[0].get("cardmarket_price", 0)) * 100,
+                float(card_prices[0].get("coolstuffinc_price", 0)) * 100,
+                float(card_prices[0].get("ebay_price", 0)) * 100,
+                float(card_prices[0].get("tcgplayer_price", 0)) * 100
+            ))
+        except Exception as e:
+            print(f"[EXCEPTION populate_card_prices] | {e}")
+            print(card)
+            return
+
+    try:
+        cur.executemany(
+            """
+                INSERT INTO card_prices (
+                    card_id,
+                    amazon_price,
+                    cardmarket_price,
+                    coolstuffinc_price,
+                    ebay_price,
+                    tcgplayer_price
+                )
+                VALUES 
+                    (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT
+                    (card_id)
+                DO NOTHING;
+            """,
+            params
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_card_prices] | {e}")
+        conn.rollback()
+
+
+
+def populate_linkmarkers() -> None:
+    print("[POPULATING LINKMARKERS]")
+    params = []
+    for card in data:
+        card_id: int = card['id']
+        linkmarkers: list[str] = card.get('linkmarkers')
+        if not linkmarkers: continue
+        for linkmarker in linkmarkers:
+            params.append((card_id, linkmarker))
+    
+    try:
+        cur.executemany(
+            """
+                INSERT INTO linkmarkers (
+                    card_id,
+                    position
+                )
+                VALUES
+                    (%s, %s)
+                ON CONFLICT
+                    (card_id, position)
+                DO NOTHING;
+            """,
+            (params)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_linkmarkers] | {e}")
+        conn.rollback()
+
+
+def populate_banlist() -> None:
+    print("[POPULATE BANLIST]")
+    params = []
+    for card in data:
+        card_id: int = card['id']
+        banlist_info: dict[str, str] | None = card.get("banlist_info")
+        if not banlist_info: continue
+        for k, v in banlist_info.items():    
+            params.append((card_id, k.replace("ban_", "").strip(), v))
+
+    try:
+        cur.execute("DETELE FROM banlist;")
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_banlist DELETE] | {e}")
+        conn.rollback()
+
+    try:
+        cur.executemany(
+            """
+                INSERT INTO banlist (
+                    card_id,
+                    ban_org,
+                    ban_type
+                )
+                VALUES 
+                    (%s, %s, %s)
+                ON CONFLICT
+                    (card_id, ban_org, ban_type)
+                DO NOTHING;
+            """,
+            (params)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_banlist] | {e}")
+        conn.rollback()
 
 
 def main() -> None:
-    load_data()
     init_db()
-
     populate_cards()
-    populate_images()
+    populate_set_rarity()
     populate_sets()
-    show_all_cards()
-
+    populate_card_prices()
+    populate_linkmarkers()
+    populate_banlist()
+    populate_images()
+    db.db_size(cur)
     close_db()
 
 
