@@ -1,12 +1,5 @@
 
 
-CREATE TABLE IF NOT EXISTS set_rarity (
-    set_rarity_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name citext NOT NULL UNIQUE,
-    code TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 
 CREATE TABLE IF NOT EXISTS cards (
     card_id INT PRIMARY KEY NOT NULL,
@@ -27,22 +20,23 @@ CREATE TABLE IF NOT EXISTS cards (
 
 
 CREATE TABLE IF NOT EXISTS card_sets (
-    card_set_code citext PRIMARY KEY NOT NULL,
-    name TEXT NOT NULL,
-    set_rarity_id INT,
-    price INT DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (set_rarity_id) REFERENCES set_rarity(set_rarity_id) ON DELETE SET NULL ON UPDATE CASCADE
+    card_set_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    set_name citext NOT NULL UNIQUE,
+    set_code TEXT NOT NULL,
+    num_of_cards INT NOT NULL CHECK (num_of_cards >= 0),
+    tcg_date DATE,
+    set_image TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 
 CREATE TABLE IF NOT EXISTS cards_in_sets (
+    cards_in_set_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     card_id INT NOT NULL,
-    card_set_code citext NOT NULL,
+    card_set_id INTEGER NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT set_cards_cstr_pkey PRIMARY KEY (card_id, card_set_code),
     FOREIGN KEY (card_id) REFERENCES cards(card_id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (card_set_code) REFERENCES card_sets(card_set_code) ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY (card_set_id) REFERENCES card_sets(card_set_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 
@@ -89,8 +83,7 @@ CREATE TABLE IF NOT EXISTS card_prices (
 
 -- set_cards
 CREATE INDEX IF NOT EXISTS idx_cards_in_sets_card_id ON cards_in_sets(card_id);
-CREATE INDEX IF NOT EXISTS idx_cards_in_sets_set_code ON cards_in_sets(card_set_code);
-CREATE INDEX IF NOT EXISTS idx_card_sets_rarity ON card_sets(set_rarity_id);
+CREATE INDEX IF NOT EXISTS idx_cards_in_sets_set_id ON cards_in_sets(card_set_id);
 
 -- linkmarkers
 CREATE INDEX IF NOT EXISTS idx_linkmarkers_card_id ON linkmarkers(card_id);

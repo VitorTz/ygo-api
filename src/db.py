@@ -1,4 +1,5 @@
 import psycopg
+from psycopg import sql
 from psycopg import Connection, Cursor
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
@@ -96,10 +97,25 @@ def db_enum_value_exists(cur: Cursor, enum: str, value: str) -> bool:
     return r is not None
 
 
-def db_add_enum_value(conn: Connection, cur: Cursor, enum: str, value: str) -> None:
-    try:
-        print(f"[TRY ADD ENUM VALUE ADDED] {enum}:{value}")
-        cur.execute(f"ALTER TYPE {enum} ADD VALUE IF NOT EXISTS %s;", (value, ))
+def db_add_enum_value_if_not_exists(conn: Connection, cur: Cursor, enum: str, value: str) -> None:
+    try:        
+        check_query = """
+            SELECT enumlabel
+            FROM pg_enum
+            JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
+            WHERE pg_type.typname = %s AND enumlabel = %s;
+        """
+        cur.execute(check_query, (enum, value))
+        exists = cur.fetchone()
+
+        if exists: return
+        
+        query = sql.SQL("ALTER TYPE {enum} ADD VALUE {value}").format(
+            enum=sql.Identifier(enum),
+            value=sql.Literal(value)
+        )
+        print(f"[TRY ADD ENUM VALUE] {enum}:{value}")
+        cur.execute(query)
         conn.commit()
         print(f"[NEW ENUM VALUE ADDED] {enum}:{value}")
     except Exception as e:
@@ -142,3 +158,22 @@ def db_get_enum_list(cur: Cursor, enum: str) -> list[str]:
         """
     )
     return [x['name'] for x in cur.fetchall()]
+
+
+def db_show_all(cur: Cursor, table: str) -> None:
+    cur.execute(f"SELECT * FROM {table};")
+    [print(i) for i in cur.fetchall()]
+
+
+
+def db_card_exists(cur: Cursor, card_id: int) -> bool:
+    cur.execute("SELECT card_id FROM cards WHERE card_id = %s;", (card_id, ))
+    r = cur.fetchone()
+    return r is not None
+
+
+def db_count(cur: Cursor, table: str) -> int:
+    cur.execute(f"SELECT count(*) as total FROM {table};")
+    r = cur.fetchone()
+    if r: return r['total']
+    return 0

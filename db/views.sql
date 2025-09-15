@@ -27,19 +27,17 @@ IF NOT EXISTS (
             (
                 SELECT jsonb_agg(
                     jsonb_build_object(
-                        'code', cs.card_set_code,
-                        'name', cs.name,
-                        'rarity', sr.name,
-                        'rarity_code', sr.code,
-                        'price', COALESCE(cs.price, 0)::float / 100
+                        'set_name', cs.set_name,
+                        'set_code', cs.set_code,
+                        'num_of_cards', cs.num_of_cards,
+                        'tcg_date', cs.tcg_date,
+                        'set_image', cs.set_image
                     )
                 )
                 FROM 
                     cards_in_sets cis
                 JOIN 
-                    card_sets cs ON cs.card_set_code = cis.card_set_code
-                JOIN 
-                    set_rarity sr ON sr.set_rarity_id = cs.set_rarity_id
+                    card_sets cs ON cs.card_set_id = cis.card_set_id
                 WHERE 
                     cis.card_id = c.card_id
             ),

@@ -104,3 +104,12 @@ def load_ygoprodeck_data() -> None:
     with open(f"res/{datetime.now()}.json", "w+") as file:
         json.dump(data, file, indent=4, sort_keys=True)
     return data
+
+
+def load_ygoprodeck_cardsets() -> None:
+    print(f"[REQUESTING YGO CARD SET DATA]")
+    r = requests.get("https://db.ygoprodeck.com/api/v7/cardsets.php")
+    data = r.json()
+    with open(f"res/cardsets-{datetime.now()}.json", "w+") as file:
+        json.dump(data, file, indent=4, sort_keys=True)
+    return data

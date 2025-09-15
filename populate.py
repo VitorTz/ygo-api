@@ -1,13 +1,14 @@
-from src.util import download_image, delete_file, load_ygoprodeck_data
 from multiprocessing.pool import ThreadPool
 from psycopg import Connection, Cursor
 from threading import Lock
 from pathlib import Path
 from src.s3 import YgoS3
+from src import util
 from src import db
 
 
-data: list[dict] = load_ygoprodeck_data()
+data: list[dict] = util.load_ygoprodeck_data()
+card_sets: list[dict] = util.load_ygoprodeck_cardsets()
 conn: Connection = None
 cur: Cursor = None
 lock = Lock()
@@ -22,32 +23,6 @@ def init_db() -> None:
 def close_db() -> None:
     cur.close()
     conn.close()
-
-
-def card_exists(card_id: int) -> bool:
-    cur.execute("SELECT card_id FROM cards WHERE card_id = %s;", (card_id, ))
-    r = cur.fetchone()
-    return r is not None
-
-
-def show_all(table: str) -> None:
-    cur.execute(f"SELECT * FROM {table};")
-    for i in cur.fetchall():
-        print(i)
-
-
-def count(table: str) -> int:
-    cur.execute(f"SELECT count(*) as total FROM {table};")
-    r = cur.fetchone()
-    if r: return r['total']
-    return 0
-
-
-def update_archetypes(archetypes: set[str]) -> None:
-    print("[UPDATING ARCHETYPES]")
-    for archetype in archetypes:
-        if not db.db_enum_value_exists(cur, 'archetype_enum', archetype):
-            db.db_add_enum_value(conn, cur, 'archetype_enum', archetype)
 
 
 def populate_cards() -> None:
@@ -101,7 +76,9 @@ def populate_cards() -> None:
             print(card)
             return
     
-    update_archetypes(archetypes)
+    print("[UPDATING ARCHETYPES]")
+    for archetype in archetypes:
+        db.db_add_enum_value_if_not_exists(conn, cur, 'archetype_enum', archetype)
 
     try:
         cur.executemany(
@@ -174,27 +151,27 @@ def populate_images() -> None:
             image_url: str | None = image.get('image_url')
             if image_url:
                 image_url_path = Path(f'tmp/{card_id}-image_url.jpg')
-                image_url_path: Path = download_image(image_url_path, image_url)
+                image_url_path: Path = util.download_image(image_url_path, image_url)
                 image_url: str = s3.upload_card(card_id, 'normal', image_url_path)
-                delete_file(image_url_path)
+                util.delete_file(image_url_path)
                 if 'http' not in image_url:
                     image_url = None
 
             image_url_cropped: str | None = image.get('image_url_cropped')
             if image_url_cropped:
                 image_url_cropped_path = Path(f'tmp/{card_id}-image_url_cropped.jpg')
-                image_url_cropped_path: Path = download_image(image_url_cropped_path, image_url_cropped)
+                image_url_cropped_path: Path = util.download_image(image_url_cropped_path, image_url_cropped)
                 image_url_cropped: str = s3.upload_card(card_id, 'cropped', image_url_cropped_path)
-                delete_file(image_url_cropped_path)
+                util.delete_file(image_url_cropped_path)
                 if 'http' not in image_url_cropped:
                     image_url_cropped = None
 
             image_url_small: str | None = image.get('image_url_small')
             if image_url_small:
                 image_url_small_path = Path(f'tmp/{card_id}-image_url_small.jpg')
-                image_url_small_path: Path = download_image(image_url_small_path, image_url_small)
+                image_url_small_path: Path = util.download_image(image_url_small_path, image_url_small)
                 image_url_small: str = s3.upload_card(card_id, 'small', image_url_small_path)
-                delete_file(image_url_small_path)
+                util.delete_file(image_url_small_path)
                 if 'http' not in image_url_small:
                     image_url_small = None
 
@@ -265,44 +242,37 @@ def populate_set_rarity() -> None:
 
 def populate_sets() -> None:
     print("[POPULATING SETS]")
-    rarity: dict[str, int] = {}
-    cur.execute("SELECT name, set_rarity_id FROM set_rarity;")
-    for r in cur.fetchall():
-        rarity[r['name']] = r['set_rarity_id']
 
-    params_card_sets: set[tuple[str, str, str, int]] = set()
-    params_cards_in_sets = []
-    for card in data:
-        card_id = card['id']
-        card_sets: list[dict] = card.get("card_sets")
-        if not card_sets: continue
-        for s in card_sets:
-            params_card_sets.add((
-                s['set_code'],
-                s['set_name'],
-                rarity[s['set_rarity']],
-                float(s.get('set_price', 0)) * 100
-            ))
-            params_cards_in_sets.append((
-                card_id,
-                s['set_code']
-            ))
+    params_card_sets: list[tuple] = []
 
-    params_card_sets: list[tuple] = [x for x in params_card_sets]
+    for card_set in card_sets:
+        set_name: str = card_set['set_name']
+        set_code: str = card_set['set_code']
+        num_of_cards: int = card_set['num_of_cards']
+        tcg_date: str | None = card_set.get("tcg_date")
+        set_image: str | None = card_set.get("set_image")
+        params_card_sets.append((
+            set_name,
+            set_code,
+            num_of_cards,
+            tcg_date,
+            set_image
+        ))
 
     try:
         cur.executemany(
             """
                 INSERT INTO card_sets (
-                    card_set_code,
-                    name,
-                    set_rarity_id,
-                    price
+                    set_name,
+                    set_code,
+                    num_of_cards,
+                    tcg_date,
+                    set_image
                 )
                 VALUES 
-                    (%s, %s, %s, %s)
+                    (%s, %s, %s, %s, %s)
                 ON CONFLICT
-                    (card_set_code)
+                    (set_name)
                 DO NOTHING;
             """,
             (params_card_sets)
@@ -312,25 +282,6 @@ def populate_sets() -> None:
         print(f"[EXCEPTION populate_sets params_card_sets] {e}")
         conn.rollback()
 
-    try:
-        cur.executemany(
-            """
-                INSERT INTO cards_in_sets (
-                    card_id,
-                    card_set_code
-                )
-                VALUES
-                    (%s, %s)
-                ON CONFLICT
-                    (card_id, card_set_code)
-                DO NOTHING;
-            """,
-            (params_cards_in_sets)
-        )
-        conn.commit()
-    except Exception as e:
-        print(f"[EXCEPTION populate_sets params_cards_in_sets] {e}")
-        conn.rollback()
 
 def populate_card_prices() -> None:
     print("[POPULATING CARD PRICES]")
@@ -421,7 +372,7 @@ def populate_banlist() -> None:
             params.append((card_id, k.replace("ban_", "").strip(), v))
 
     try:
-        cur.execute("DETELE FROM banlist;")
+        cur.execute("DELETE FROM banlist;")
         conn.commit()
     except Exception as e:
         print(f"[EXCEPTION populate_banlist DELETE] | {e}")
@@ -451,13 +402,13 @@ def populate_banlist() -> None:
 
 def main() -> None:
     init_db()
-    populate_cards()
-    populate_set_rarity()
+    populate_cards()    
     populate_sets()
     populate_card_prices()
     populate_linkmarkers()
     populate_banlist()
     populate_images()
+    db.db_show_all(cur, "card_sets")
     db.db_size(cur)
     close_db()
 
