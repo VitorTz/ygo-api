@@ -4,7 +4,7 @@ from threading import Lock
 from pathlib import Path
 from src.s3 import YgoS3
 from src import util
-from src import db
+from core import db
 import json
 
 
