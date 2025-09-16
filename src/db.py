@@ -33,6 +33,11 @@ def get_db():
         conn.close()
 
 
+def db_count(cur: Cursor, table: str) -> int:
+    cur.execute(f"SELECT count(*) as total FROM {table}")
+    return cur.fetchone()['total']
+
+
 def db_execute_sql_file(file: Path, conn: Connection, cursor: Cursor) -> None:
     try:
         with open(file, "r", encoding="utf-8") as f:
@@ -161,6 +166,7 @@ def db_get_enum_list(cur: Cursor, enum: str) -> list[str]:
 
 
 def db_show_all(cur: Cursor, table: str) -> None:
+    print(f"############### {table} ###############")
     cur.execute(f"SELECT * FROM {table};")
     [print(i) for i in cur.fetchall()]
 

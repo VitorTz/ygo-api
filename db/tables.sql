@@ -81,6 +81,24 @@ CREATE TABLE IF NOT EXISTS card_prices (
 );
 
 
+CREATE TABLE IF NOT EXISTS trivias (
+    trivia_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    question citext NOT NULL UNIQUE,
+    explanation TEXT NOT NULL,
+    source TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+CREATE TABLE IF NOT EXISTS trivia_answers (
+    trivia_answer_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    trivia_id INT,
+    answer TEXT NOT NULL,    
+    is_correct_answer BOOLEAN NOT NULL,
+    CONSTRAINT trivia_answers_cstr_unique UNIQUE (trivia_id, answer),
+    FOREIGN KEY (trivia_id) REFERENCES trivias(trivia_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 -- set_cards
 CREATE INDEX IF NOT EXISTS idx_cards_in_sets_card_id ON cards_in_sets(card_id);
 CREATE INDEX IF NOT EXISTS idx_cards_in_sets_set_id ON cards_in_sets(card_set_id);

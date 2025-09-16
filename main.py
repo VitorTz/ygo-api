@@ -1,10 +1,13 @@
+from src.schemas.pagination import CardPagination, CardSetPagination, TriviaPagination
+from src.schemas.stringlist import StringListResponse
 from fastapi import FastAPI, status, Depends, Query
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from src.schemas.card import Card
 from psycopg import Cursor
-from src.util import normalize_card_sort_by, normalize_sort_order, normalize_card_sets_sort_by, extract_card_filters
-import json
-from src.db import db_migrate, get_db, get_card_by_id, db_get_enum_list, db_instance
+from typing import List
+from src import util
+from src import db
 
 
 ENUMS: dict[str, set[str]] = {}
@@ -13,26 +16,35 @@ CARDS: list[dict] = []
 
 def load_enums() -> None:
     global ENUMS
-    conn, cur = db_instance()
+    conn, cur = db.db_instance()
+    archetypes = db.db_get_enum_list(cur, "archetype_enum")
+    attributes = db.db_get_enum_list(cur, "attribute_enum")
+    frametypes = db.db_get_enum_list(cur, "frametype_enum")
+    races = db.db_get_enum_list(cur, "race_enum")
+    types = db.db_get_enum_list(cur, "type_enum")
     ENUMS = {
-        'archetype': set(db_get_enum_list(cur, "archetype_enum")),
-        'attribute': set(db_get_enum_list(cur, "attribute_enum")),
-        'frametype': set(db_get_enum_list(cur, "frametype_enum")),
-        'race': set(db_get_enum_list(cur, "race_enum")),
-        'type': set(db_get_enum_list(cur, "type_enum"))
+        'archetype': {'set': set(archetypes), 'list': archetypes},
+        'attribute': {'set': set(attributes), 'list': attributes},
+        'frametype': {'set': set(frametypes), 'list': frametypes},
+        'race': {'set': set(races), 'list': races},
+        'type': {'types': set(types), 'list': types}
     }
     cur.close()
     conn.close()
 
+
 def load_all_cards() -> None:
     global CARDS
-    with open("res/api/cards.json", "r", encoding="utf-8") as f:
-        CARDS = json.load(f)    
+    conn, cur = db.db_instance()
+    cur.execute("SELECT * FROM cards_mv;")
+    CARDS = cur.fetchall()
+    cur.close()
+    conn.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db_migrate()
+    db.db_migrate()
     load_enums()
     load_all_cards()
     yield
@@ -47,20 +59,33 @@ async def home():
     return status.HTTP_200_OK
 
 
-@app.get("/cards/random")
-async def get_random_card(db = Depends(get_db)):
-    cur: Cursor = db.cursor()
-    cur.execute("SELECT * FROM cards_mv ORDER BY RANDOM() LIMIT 1;")
-    return JSONResponse(cur.fetchone(), status.HTTP_200_OK)    
+@app.get("/cards/random", response_model=List[Card])
+async def get_random_card(
+    depends = Depends(db.get_db),
+    limit: int = Query(64, ge=1, le=999)    
+):
+    cur: Cursor = depends.cursor()
+    total = db.db_count(cur, "cards_mv")
+    cur.execute("SELECT * FROM cards_mv ORDER BY RANDOM() LIMIT %s;", (limit, ))
+    response = {
+        "total": total,
+        "limit": limit,
+        "offset": 0,
+        "page": (0 // limit) + 1,
+        "pages": (total + limit - 1) // limit,
+        "results": cur.fetchall()
+    }
+
+    return JSONResponse(response, status.HTTP_200_OK)
 
 
-@app.get("/cards")
+@app.get("/cards", response_model=CardPagination)
 async def get_cards(
-    db = Depends(get_db),
+    depends = Depends(db.get_db),
     limit: int = Query(64, ge=1, le=999),
     offset: int = Query(0, ge=0),
     sort_by: str = Query("name", description="sort by name, attack, defence, level or card_id"),
-    sort_order: str = Query("asc", description="asc (ascending) or desc (descending) order"),
+    sort_order: str = Query("asc", description="ascending or descending order"),
     card_id: int | None = Query(None, description='search for the card with the exact card_id'),
     search: str | None = Query(None, description="search=Magician will search for all cards with \"Magician\" in the name"),
     null_first: bool = Query(False),
@@ -70,11 +95,11 @@ async def get_cards(
     attribute: str | None = Query(None),
     frametype: str | None = Query(None)
 ):
-    cur: Cursor = db.cursor()
+    cur: Cursor = depends.cursor()
 
-    sort_by = normalize_card_sort_by(sort_by)
-    sort_order = normalize_sort_order(sort_order)
-    where_clause, params = extract_card_filters(locals(), search) # archetype, attribute, race, type and frametype
+    sort_by = util.normalize_card_sort_by(sort_by)
+    sort_order = util.normalize_sort_order(sort_order)
+    where_clause, params = util.extract_card_filters(locals(), search) # archetype, attribute, race, type and frametype
 
     if archetype and archetype not in ENUMS['archetype']:
         return JSONResponse(content={'error': f'invalid archetype -> {archetype}'}, status_code=status.HTTP_400_BAD_REQUEST)
@@ -92,7 +117,7 @@ async def get_cards(
         return JSONResponse(content={'error': f'invalid type -> {type}'}, status_code=status.HTTP_400_BAD_REQUEST)
 
     if card_id is not None:
-        card: dict | None = get_card_by_id(cur, card_id)
+        card: dict | None = db.get_card_by_id(cur, card_id)
         response = {
             "total": 1 if card is not None else 0,
             "limit": limit,
@@ -117,6 +142,7 @@ async def get_cards(
                 tuple(params)
             )
         except Exception as e:
+            print(e)
             return JSONResponse('error', status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         total = cur.fetchone()['total']
@@ -163,6 +189,7 @@ async def get_cards(
             tuple(params)
         )            
     except Exception as e:
+        print(e)
         return JSONResponse('error', status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     total = cur.fetchone()['total']
@@ -182,7 +209,9 @@ async def get_cards(
     try:
         cur.execute(query, tuple(params))
     except Exception as e:
+        print(e)
         return JSONResponse('error', status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     response = {
         "total": total,
         "limit": limit,
@@ -195,78 +224,70 @@ async def get_cards(
     return JSONResponse(response, status.HTTP_200_OK)
 
 
-@app.get("/all_cards")
+@app.get("/cards/all", response_model=CardPagination)
 async def get_cards():
-    return JSONResponse(content={
+    response = {
         "total": len(CARDS),
+        "limit": len(CARDS),
+        "offset": 0,
+        "page": 1,
+        "pages": 1,
         "results": CARDS
-    })
+    }
+    return JSONResponse(response, status.HTTP_200_OK)
 
 
-@app.get("/attributes")
-async def get_attributes(db = Depends(get_db)):
-    cur: Cursor = db.cursor()
-    rows: list[str] = db_get_enum_list(cur, "attribute_enum")
-    return JSONResponse({"total": len(rows), "results": rows}, status.HTTP_200_OK)
+@app.get("/attributes", response_model=StringListResponse)
+async def get_attributes():
+    return JSONResponse({"total": len(ENUMS['attribute']['list']), "results": ENUMS['attribute']['list']}, status.HTTP_200_OK)
 
 
-@app.get("/archetypes")
-async def get_archetypes(db = Depends(get_db)):
-    cur: Cursor = db.cursor()
-    rows: list[str] = db_get_enum_list(cur, "archetype_enum")
-    return JSONResponse({"total": len(rows), "results": rows}, status.HTTP_200_OK)
+@app.get("/archetypes", response_model=StringListResponse)
+async def get_archetypes():
+    return JSONResponse({"total": len(ENUMS['archetype']['list']), "results": ENUMS['archetype']['list']}, status.HTTP_200_OK)
 
 
-@app.get("/frametypes")
-async def get_frametypes(db = Depends(get_db)):
-    cur: Cursor = db.cursor()
-    rows: list[str] = db_get_enum_list(cur, "frametype_enum")
-    return JSONResponse({"total": len(rows), "results": rows}, status.HTTP_200_OK)
+@app.get("/frametypes", response_model=StringListResponse)
+async def get_frametypes():
+    return JSONResponse({"total": len(ENUMS['frametype']['list']), "results": ENUMS['frametype']['list']}, status.HTTP_200_OK)
 
 
-@app.get("/races")
-async def get_races(db = Depends(get_db)):
-    cur: Cursor = db.cursor()
-    rows: list[str] = db_get_enum_list(cur, "race_enum")
-    return JSONResponse({"total": len(rows), "results": rows}, status.HTTP_200_OK)
+@app.get("/races", response_model=StringListResponse)
+async def get_races():
+    return JSONResponse({"total": len(ENUMS['race']['list']), "results": ENUMS['race']['list']}, status.HTTP_200_OK)
 
 
-@app.get("/types")
-async def get_types(db = Depends(get_db)):
-    cur: Cursor = db.cursor()
-    rows: list[str] = db_get_enum_list(cur, "type_enum")
-    return JSONResponse({"total": len(rows), "results": rows}, status.HTTP_200_OK)
+@app.get("/types", response_model=StringListResponse)
+async def get_types():
+    return JSONResponse({"total": len(ENUMS['type']['list']), "results": ENUMS['type']['list']}, status.HTTP_200_OK)
 
 
-@app.get("/sets")
+@app.get("/sets", response_model=CardSetPagination)
 async def get_sets(
-    db = Depends(get_db),
+    depends = Depends(db.get_db),
     limit: int = Query(64, ge=1, le=999),
     offset: int = Query(0, ge=0),
     sort_by: str = Query("card_set_code", description="sort by card_set_code, name or price"),
-    sort_order: str = Query("asc", description="asc (ascending) or desc (descending) order")
+    sort_order: str = Query("asc", description="ascending or descending order")
 ):
-    sort_order: str = normalize_sort_order(sort_order)
-    sort_by: str = normalize_card_sets_sort_by(sort_by)
+    sort_order: str = util.normalize_sort_order(sort_order)
+    sort_by: str = util.normalize_card_sets_sort_by(sort_by)
 
-    cur: Cursor = db.cursor()
-    cur.execute("SELECT count(*) as total FROM card_sets;")
-    total: int = cur.fetchone()['total']
+    cur: Cursor = depends.cursor()
+    total = db.db_count(cur, 'card_sets')    
 
     cur.execute(
         f"""
             SELECT 
-                cs.card_set_code, 
-                cs.name, 
-                sr.name as set_rarity, 
-                sr.code as set_rarity_code,
-                cs.price::float / 100.0 AS price
+                set_name, 
+                set_code
+                num_of_cards,
+                tcg_date,
+                set_image
             FROM 
-                card_sets cs
-            JOIN
-                set_rarity sr ON cs.set_rarity_id = sr.set_rarity_id
+                card_sets
             ORDER BY 
-                cs.{sort_by} {sort_order}
+                {sort_by} {sort_order}
             LIMIT %s
             OFFSET %s;
         """,
@@ -285,62 +306,53 @@ async def get_sets(
     return JSONResponse(response, status.HTTP_200_OK)
 
 
-@app.get("/sets/cards")
+@app.get("/sets/cards", response_model=CardPagination)
 async def get_card_sets(
-    db = Depends(get_db),
-    card_set_code: str = Query(),
+    depends = Depends(db.get_db),
+    set_name: str = Query(),
     limit: int = Query(64, ge=1, le=999),
     offset: int = Query(0, ge=0),
-    sort_by: str = Query("name", description="sort by name, attack, defence, level or card_id"),
-    sort_order: str = Query("asc", description="asc (ascending) or desc (descending) order")
+    sort_by: str = Query("set_name", description="sort by set_name, set_code, num_of_cards or tcg_date"),
+    sort_order: str = Query("asc", description="ascending or descending order")
 ):
-    sort_order: str = normalize_sort_order(sort_order)
-    sort_by: str = normalize_card_sort_by(sort_by)
+    cur: Cursor = depends.cursor()
+    cur.execute("SELECT card_set_id FROM card_sets WHERE set_name = %s;", (set_name, ))
+    r = cur.fetchone()
 
-    cur: Cursor = db.cursor()
+    if r is None:
+        return JSONResponse({"error": f"Invalid set_name -> {set_name}"}, status.HTTP_400_BAD_REQUEST)
+    
+    sort_order: str = util.normalize_sort_order(sort_order)
+    sort_by: str = util.normalize_card_sort_by(sort_by)
+    card_set_id: int = r['card_set_id']
+
     cur.execute(
         """
             SELECT 
                 count(c.*) as total
             FROM 
-                cards_in_sets cis
-            JOIN 
-                cards c ON cis.card_id = c.card_id
-            JOIN 
-                card_sets cs ON cis.card_set_code = cs.card_set_code
+                cards_in_sets
             WHERE 
-                cs.card_set_code = %s;
+                card_set_id = %s;
         """,
-        (card_set_code, )
+        (card_set_id, )
     )
     total: int = cur.fetchone()['total']
 
     cur.execute(
         """
             SELECT 
-                c.card_id,
-                c.name,
-                c.descr,
-                c.attack,
-                c.defence,
-                c.level,
-                c.archetype,
-                c.attribute,
-                c.frametype,
-                c.race,
-                c.type
+                c.*
             FROM 
                 cards_in_sets cis
             JOIN 
-                cards c ON cis.card_id = c.card_id
-            JOIN 
-                card_sets cs ON cis.card_set_code = cs.card_set_code
+                cards_mv c ON cis.card_id = c.card_id
             WHERE 
-                cs.card_set_code = %s
+                cs.card_set_id = %s
             LIMIT %s
             OFFSET %s;
         """,
-        (card_set_code, limit, offset)
+        (card_set_id, limit, offset)
     )
 
     response = {
@@ -355,40 +367,32 @@ async def get_card_sets(
     return JSONResponse(response, status.HTTP_200_OK)
 
 
-@app.get("/sets/rank")
-async def get_card_sets(
-    db = Depends(get_db),    
+@app.get("/trivias", response_model=TriviaPagination)
+async def get_trivias(
+    depends = Depends(db.get_db),
     limit: int = Query(64, ge=1, le=999),
-    offset: int = Query(0, ge=0),    
-    sort_order: str = Query("desc", description="asc (ascending) or desc (descending) order")
+    offset: int = Query(0, ge=0)
 ):
-    sort_order: str = normalize_sort_order(sort_order)
+    cur: Cursor = depends.cursor()    
 
-    cur: Cursor = db.cursor()
+    total = db.db_count(cur, 'trivias')
+
     cur.execute(
         """
-            SELECT 
-                count(*) as total
+            SELECT
+                t.question,
+                t.explanation,
+                t.source,
+                ARRAY_AGG(ta.answer ORDER BY ta.trivia_answer_id) AS answers,
+                MAX(ta.answer) FILTER (WHERE ta.is_correct_answer) AS correct_answer
             FROM 
-                card_sets;
-        """        
-    )
-    total: int = cur.fetchone()['total']
-
-    cur.execute(
-        f"""
-            SELECT 
-                cs.card_set_code,
-                cs.name AS set_name,
-                COUNT(cis.card_id) AS total_cards
-            FROM 
-                card_sets cs
+                trivias t
             JOIN 
-                cards_in_sets cis ON cs.card_set_code = cis.card_set_code
+                trivia_answers ta ON t.trivia_id = ta.trivia_id
             GROUP BY 
-                cs.card_set_code, cs.name
-            ORDER BY 
-                total_cards {sort_order}
+                t.trivia_id, t.question, t.explanation, t.source
+            ORDER BY
+                t.trivia_id ASC
             LIMIT %s
             OFFSET %s;
         """,
@@ -405,3 +409,47 @@ async def get_card_sets(
     }
 
     return JSONResponse(response, status.HTTP_200_OK)
+
+
+@app.get("/trivias/random", response_model=TriviaPagination)
+async def get_trivias(
+    depends = Depends(db.get_db),
+    limit: int = Query(64, ge=1, le=999),
+    offset: int = Query(0, ge=0)
+):
+    cur: Cursor = depends.cursor()    
+    total = db.db_count(cur, 'trivias')
+    
+    cur.execute(
+        """
+            SELECT
+                t.question,
+                t.explanation,
+                t.source,
+                ARRAY_AGG(ta.answer ORDER BY ta.trivia_answer_id) AS answers,
+                MAX(ta.answer) FILTER (WHERE ta.is_correct_answer) AS correct_answer
+            FROM 
+                trivias t
+            JOIN 
+                trivia_answers ta ON t.trivia_id = ta.trivia_id
+            GROUP BY 
+                t.trivia_id, t.question, t.explanation, t.source
+            ORDER BY
+                RANDOM()
+            LIMIT %s
+            OFFSET %s;
+        """,
+        (limit, offset)
+    )
+
+    response = {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "page": (offset // limit) + 1,
+        "pages": (total + limit - 1) // limit,
+        "results": cur.fetchall()
+    }
+
+    return JSONResponse(response, status.HTTP_200_OK)
+    

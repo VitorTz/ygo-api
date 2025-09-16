@@ -7,7 +7,7 @@ import os
 
 
 VALID_SORT_COLUMNS = {"name", "attack", "defence", "level", "card_id"}
-VALID_CARD_SETS_SORT_COLUMNS = {"name", "card_set_code", "price"}
+VALID_CARD_SETS_SORT_COLUMNS = {"set_name", "set_code", "num_of_cards", "tcg_date"}
 VALID_SORT_ORDERS = {"asc", "desc"}
 FILTERABLE_COLUMNS = {
     "archetype",
@@ -64,7 +64,7 @@ def normalize_card_sort_by(sort_by: str) -> str:
 def normalize_card_sets_sort_by(sort_by: str) -> str:
     sort_by = sort_by.lower()
     if sort_by not in VALID_CARD_SETS_SORT_COLUMNS:
-        sort_by = "card_set_code"
+        sort_by = "set_name"
     return sort_by
 
 
@@ -97,11 +97,18 @@ def extract_card_filters(locals: dict, search: str | None) -> str:
     return where_clause, params
 
 
+def clear_ygoprodeck_data_history() -> None:
+    path = Path("res")
+    for file in path.iterdir():
+        if file.is_file() and file.suffix == ".json":
+            os.remove(str(file))
+
+
 def load_ygoprodeck_data() -> None:
     print(f"[REQUESTING YGO DATA]")
     r = requests.get("https://db.ygoprodeck.com/api/v7/cardinfo.php")
     data = r.json()['data']
-    with open(f"res/{datetime.now()}.json", "w+") as file:
+    with open(f"res/cards.json", "w+") as file:
         json.dump(data, file, indent=4, sort_keys=True)
     return data
 
@@ -110,6 +117,6 @@ def load_ygoprodeck_cardsets() -> None:
     print(f"[REQUESTING YGO CARD SET DATA]")
     r = requests.get("https://db.ygoprodeck.com/api/v7/cardsets.php")
     data = r.json()
-    with open(f"res/cardsets-{datetime.now()}.json", "w+") as file:
+    with open(f"res/cardsets.json", "w+") as file:
         json.dump(data, file, indent=4, sort_keys=True)
     return data

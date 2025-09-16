@@ -1,0 +1,79 @@
+[
+    {
+        "question": "How many life points was Weevil left with after Yugi activated Mirror Force during their duel?",
+        "explanation": "Duelist Kingdom functioned under very different rules; Mirror Force would inflict damage to the target based on the difference of ATK between the monster who triggered it, and the other monsters that were destroyed by it. Interestingly, because Weevil's Basic Insect had 2150 ATK, this should've dropped his life points to zero. However, this didn't occur.\nCoincidentally, Yugi also could've destroyed any of Weevil's monsters if he played his Dark Magician in attack mode, but it dealt more damage to use the tactic that he did.",
+        "source": "https://www.funtrivia.com/trivia-quiz/Television/Yu-Gi-Oh-Duelist-Kingdom-390933.html",
+        "answers": [
+            {"answer": "555", "is_correct_answer": true},
+            {"answer": "1480", "is_correct_answer": false},
+            {"answer": "500", "is_correct_answer": false},
+            {"answer": "He didn't take any damage", "is_correct_answer": false}
+        ]
+    },
+    {
+        "question": "What is the name of Yugi's ace monster?",
+        "explanation": "The Dark Magician is known as Yugi's most faithful companion and the one card that he has the most connection to.",
+        "source": "https://www.funtrivia.com/trivia-quiz/Television/Yu-Gi-Oh-376184.html",
+        "answers": [
+            {"answer": "Winged Dragon of Ra", "is_correct_answer": false},
+            {"answer": "Dark Magician of Chaos", "is_correct_answer": false},
+            {"answer": "Dark Magician", "is_correct_answer": true},
+            {"answer": "Buster Blader", "is_correct_answer": false}
+        ]
+    },
+    {        
+        "question": "When dueling Mako Tsunami, Yugi played a card earlier in the duel. Mako then used Yugi's card because it pulled the tide of the water. What object and type of card did Yugi attack?",
+        "explanation": "Earlier in the duel, Yugi equips the moon card to his Silver Fang to increase his attack. However, when the Silver Fang was destroyed, the moon card stayed on the field. This rule not only violates regular equip spells rules, but also Combat Step rules, as he attacked a magic card instead of another monster on the field.",
+        "source": "https://www.funtrivia.com/trivia-quiz/Television/Duelist-Kingdom-Odd-Rules-368424.html",
+        "answers": [
+            {"answer": "The Moon - Magic/Equip", "is_correct_answer": true},
+            {"answer": "Giant Soldier of Stone - Monster", "is_correct_answer": false},
+            {"answer": "Metal Reflect Slime - Trap/Continuous", "is_correct_answer": false},
+            {"answer": "Silver Fang - Monster", "is_correct_answer": false}
+        ]
+    },
+    {        
+        "question": "Marik's family was important in the days of the Pharaoh. What was their occupation?",
+        "explanation": "As Tomb Keepers, the Ishtar family was in charge of protecting the Pharaoh and his secrets. Marik longed to be something more then just a tomb keeper, but his father would not allow it. Thus, he was never allowed into the outside world. Marik's need to be more led to him sending his father to the Shadow Realm. There is a tattoo on Marik's back that reveals the secret of the Pharaoh.",
+        "source": "https://www.funtrivia.com/trivia-quiz/Television/Marik-Ishtar-340991.html",
+        "answers": [
+            {"answer": "Tomb Keepers", "is_correct_answer": true},
+            {"answer": "Magicians", "is_correct_answer": false},
+            {"answer": "Rare Hunters", "is_correct_answer": false},
+            {"answer": "Oracles", "is_correct_answer": false}
+        ]
+    },
+    {        
+        "question": "Who was the first duelist Yu-Gi faced against in Duelist Kingdom?",
+        "explanation": "Yu-Gi placed one starchip on the line and all of his cards in the duel against Weevil. Yu-Gi defeated Weevil with 50 life points.",
+        "source": "https://www.funtrivia.com/trivia-quiz/Television/Easy-Yu-Gi-Oh-Trivia-2-148895.html",
+        "answers": [
+            {"answer": "Rex Raptor", "is_correct_answer": false},
+            {"answer": "Mako Tsunami", "is_correct_answer": false},
+            {"answer": "Mai Valentine", "is_correct_answer": false},
+            {"answer": "Weevil Underwood", "is_correct_answer": true}
+        ]
+    },
+    {        
+        "question": "What is Summoned Skull's defense power?",
+        "explanation": "Summoned Skull's attack is 2500. His defense is 1200. This makes Summoned Skull quite vulnerable to magic cards like Shield and Sword.",
+        "source": "https://www.funtrivia.com/trivia-quiz/Television/Yu-gi-oh-TV-Knowledge-109849.html",
+        "answers": [
+            {"answer": "1100", "is_correct_answer": false},
+            {"answer": "2500", "is_correct_answer": false},
+            {"answer": "1300", "is_correct_answer": false},
+            {"answer": "1200", "is_correct_answer": true}
+        ]
+    },
+    {        
+        "question": "Yami and Yugi's first duel at Duelist Kingdom was against Weevil on which arena?",
+        "explanation": "Weevil led Yugi to the arena with a forest/wasteland field. Despite Weevil's trickery, Yugi won.",
+        "source": "https://www.funtrivia.com/trivia-quiz/Television/Sorceress-Arena-Trivia-108148.html",
+        "answers": [
+            {"answer": "46", "is_correct_answer": false},
+            {"answer": "5", "is_correct_answer": true},
+            {"answer": "112", "is_correct_answer": false},
+            {"answer": "9", "is_correct_answer": false}
+        ]
+    }
+]

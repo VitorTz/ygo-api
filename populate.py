@@ -5,17 +5,20 @@ from pathlib import Path
 from src.s3 import YgoS3
 from src import util
 from src import db
+import json
 
 
-data: list[dict] = util.load_ygoprodeck_data()
-card_sets: list[dict] = util.load_ygoprodeck_cardsets()
+data: list[dict] = []
+card_sets: list[dict] = []
 conn: Connection = None
 cur: Cursor = None
 lock = Lock()
 
 
 def init_db() -> None:
-    global conn, cur
+    global conn, cur, data, card_sets
+    data = util.load_ygoprodeck_data()
+    card_sets = util.load_ygoprodeck_cardsets()
     db.db_migrate()
     conn, cur = db.db_instance()
 
@@ -102,19 +105,7 @@ def populate_cards() -> None:
                     (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT
                     (card_id)
-                DO UPDATE SET
-                    name = EXCLUDED.name,
-                    descr = EXCLUDED.descr,
-                    pend_descr = EXCLUDED.pend_descr,
-                    monster_descr = EXCLUDED.monster_descr,
-                    attack = EXCLUDED.attack,
-                    defence = EXCLUDED.defence,
-                    level = EXCLUDED.level,
-                    archetype = EXCLUDED.archetype,
-                    attribute = EXCLUDED.attribute,
-                    frametype = EXCLUDED.frametype,
-                    race = EXCLUDED.race,
-                    type = EXCLUDED.type;
+                DO NOTHING;
             """,
             params
         )
@@ -122,13 +113,6 @@ def populate_cards() -> None:
     except Exception as e:
         print(f"[EXCEPTION populate_cards] | {e}")
         conn.rollback()
-
-def show_all_cards() -> None:
-    cur.execute("SELECT card_id, name FROM cards;")
-    r = cur.fetchall()
-    for card in r:
-        print(card)
-    print(len(r))
 
     
 def populate_images() -> None:
@@ -204,40 +188,6 @@ def populate_images() -> None:
             
     with ThreadPool(4) as pool:
         pool.map(populate, data)
-
-
-def populate_set_rarity() -> None:
-    print("[POPULATING SET_RARITY]")
-    rarity: set[tuple[str, str]] = set()
-    params = []
-    for card in data:
-        card_sets: list[dict] = card.get("card_sets")
-        if not card_sets: continue
-        for s in card_sets:
-            k = (s['set_rarity'], s['set_rarity_code'])
-            if k not in rarity:
-                rarity.add(k)
-                params.append(k)
-
-    try:
-        cur.executemany(
-            """
-                INSERT INTO set_rarity (
-                    name,
-                    code
-                )
-                VALUES
-                    (%s, %s)
-                ON CONFLICT
-                    (name)
-                DO NOTHING;
-            """,
-            (params)
-        )
-        conn.commit()
-    except Exception as e:
-        print(f"[EXCEPTION populate_set_rarity] | {e}")
-        conn.rollback()
 
 
 def populate_sets() -> None:
@@ -329,7 +279,6 @@ def populate_card_prices() -> None:
         conn.rollback()
 
 
-
 def populate_linkmarkers() -> None:
     print("[POPULATING LINKMARKERS]")
     params = []
@@ -400,6 +349,83 @@ def populate_banlist() -> None:
         conn.rollback()
 
 
+def populate_trivias() -> None:
+    with open("res/api/trivias.json", "r") as file:
+        trivias = json.load(file)
+    
+    params = []    
+
+    for trivia in trivias:
+        params.append((
+            trivia['question'],
+            trivia['explanation'],
+            trivia['source']
+        ))
+
+    try:
+        cur.executemany(
+            """
+                INSERT INTO trivias (
+                    question,
+                    explanation,
+                    source
+                )
+                VALUES 
+                    (%s, %s, %s)
+                ON CONFLICT
+                    (question)
+                DO NOTHING;
+            """,
+            (params)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_trivias] | {e}")
+        return
+    
+    cur.execute("SELECT trivia_id, question FROM trivias;")
+    questions = {}
+    for trivia in cur.fetchall():
+        questions[trivia['question']] = trivia['trivia_id']
+
+    
+    params = []
+    for trivia in trivias:
+        num_correct_answers = 0
+        for answers in trivia['answers']:
+            if answers['is_correct_answer']:
+                num_correct_answers += 1
+            params.append((
+                questions[trivia['question']], # trivia_id
+                answers['answer'],
+                answers['is_correct_answer']
+            ))
+        if num_correct_answers != 1:
+            print(f"[EXCEPTION populate_trivias] | CORRECT_ANSWERS {num_correct_answers} | {trivia}")
+            return
+    
+    try:
+        cur.executemany(
+            """
+                INSERT INTO trivia_answers (
+                    trivia_id,
+                    answer,
+                    is_correct_answer
+                )
+                VALUES 
+                    (%s, %s, %s)
+                ON CONFLICT
+                    (trivia_id, answer)
+                DO NOTHING;
+            """,
+            params
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"[EXCEPTION populate_trivias] | {e}")
+
+
 def main() -> None:
     init_db()
     populate_cards()    
@@ -407,8 +433,8 @@ def main() -> None:
     populate_card_prices()
     populate_linkmarkers()
     populate_banlist()
+    populate_trivias()
     populate_images()
-    db.db_show_all(cur, "card_sets")
     db.db_size(cur)
     close_db()
 
