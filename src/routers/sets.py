@@ -35,7 +35,7 @@ async def get_card_sets(
     set_name: str = Query(),
     limit: int = Query(64, ge=1, le=999),
     offset: int = Query(0, ge=0),
-    sort_by: str = Query("set_name", description="sort by set_name, set_code, num_of_cards or tcg_date"),
+    sort_by: str = Query("set_name", description="sort by set_name, num_of_cards or tcg_date"),
     sort_order: str = Query("asc", description="ascending or descending order")
 ) -> JSONResponse:
     cur: Cursor = depends.cursor()

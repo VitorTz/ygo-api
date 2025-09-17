@@ -15,12 +15,19 @@ def fetch_sets(
 ) -> None:
     sort_order: str = util.normalize_sort_order(sort_order)
     sort_by: str = util.normalize_card_sets_sort_by(sort_by)
-    total = db.db_count(cur, 'card_sets')    
     where_clause = "WHERE set_name ILIKE %s" if search is not None else ''
+
     if search is not None:
         params = [f"%{search}%", limit, offset]
     else:
         params = [limit, offset]
+    
+    cur.execute(
+        f"SELECT count(*) as total FROM card_sets {where_clause};",
+        (f"%{search}%", ) if search is not None else None,
+    )
+    total = cur.fetchone()['total']
+
     cur.execute(
         f"""
             SELECT 

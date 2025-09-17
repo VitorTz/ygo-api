@@ -14,17 +14,17 @@ async def get_cards(
     depends=Depends(db.get_db),
     limit: int = Query(64, ge=1, le=999),
     offset: int = Query(0, ge=0),
-    search: str | None = None,
-    card_id: int | None = None,
-    sort_by: str = "name",
-    sort_order: str = "asc",
-    all_cards: bool = False,
-    null_first: bool = False,
-    archetype: str | None = None,
-    race: str | None = None,
-    type: str | None = None,
-    attribute: str | None = None,
-    frametype: str | None = None
+    search: str | None = Query(None, description='you can search cards by name. search=magician will return all cards with magician in name'),
+    card_id: int | None = Query(None, description='will search for a especific card by it card_id'),
+    sort_by: str = Query("name", description="sort by name, attack, defence, level, card_id or random"),
+    sort_order: str = Query("asc", description="ascending (asc) or descending (desc) order"),
+    all_cards: bool = Query(False, description='if true, will return all cards'),
+    null_first: bool = Query(False),
+    archetype: str | None = Query(None),
+    race: str | None = Query(None),
+    type: str | None = Query(None),
+    attribute: str | None = Query(None),
+    frametype: str | None = Query(None)
 ) -> JSONResponse:
     cur: Cursor = depends.cursor()
     return fetch_cards(

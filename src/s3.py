@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 import boto3
 import uuid
-import sys
 import os
 
 

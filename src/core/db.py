@@ -1,9 +1,11 @@
-import psycopg
-from psycopg import sql
 from psycopg import Connection, Cursor
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
 from pathlib import Path
+from psycopg import sql
+from src.schemas.card import Card
+from src.schemas.rank import Rank
+import psycopg
 import os
 
 
@@ -78,7 +80,7 @@ def db_size(cur: Cursor) -> None:
     [print(i) for i in cur.fetchall()]
 
     
-def get_card_by_id(cur: Cursor, card_id: int):
+def get_card_by_id(cur: Cursor, card_id: int) -> Card:
     cur.execute("SELECT * FROM cards_mv WHERE card_id = %s;", (card_id, ))
     return cur.fetchone()
 
@@ -128,12 +130,13 @@ def db_add_enum_value_if_not_exists(conn: Connection, cur: Cursor, enum: str, va
         conn.rollback()
 
 
-def db_archetype_rank(cur: Cursor) -> None:
+def db_archetype_rank(cur: Cursor) -> list[Rank]:
     cur.execute(
         """
             SELECT 
-                archetype,
-                COUNT(*) AS total
+                archetype as name,
+                COUNT(*) AS total,
+                ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC) - 1 AS position
             FROM 
                 cards
             WHERE 
@@ -144,7 +147,7 @@ def db_archetype_rank(cur: Cursor) -> None:
                 total DESC;
         """
     )
-    print([i for i in cur.fetchall()])
+    return cur.fetchall()
 
 
 def db_get_enum_list(cur: Cursor, enum: str) -> list[str]:

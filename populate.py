@@ -504,14 +504,16 @@ def main() -> None:
     init_db()
     populate_enums()
     populate_cards()
-    populate_sets()
-    populate_cards_in_sets()
+    # populate_sets()
+    # populate_cards_in_sets()
     populate_card_prices()
     populate_linkmarkers()
     populate_banlist()
     populate_trivias()
     populate_images()
     db.db_size(cur)
+    for i in db.db_archetype_rank(cur):
+        print(i)
     close_db()
 
 

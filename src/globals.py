@@ -1,12 +1,17 @@
-from psycopg import Cursor
 from src.core import db
+
 
 CARDS: list[dict] = []
 ENUMS: dict = {}
 
 
-def load_enums(cur: Cursor) -> None:
-    global ENUMS
+def globals_init() -> None:
+    global ENUMS, CARDS
+
+    # INIT DB
+    conn, cur = db.db_instance()
+    
+    # ENUMS
     archetypes = db.db_get_enum_list(cur, "archetype_enum")
     attributes = db.db_get_enum_list(cur, "attribute_enum")
     frametypes = db.db_get_enum_list(cur, "frametype_enum")
@@ -20,17 +25,11 @@ def load_enums(cur: Cursor) -> None:
         'type': {'types': set(types), 'list': types}
     }
 
-
-def load_all_cards(cur: Cursor) -> None:
-    global CARDS
+    # CARDS
     cur.execute("SELECT * FROM cards_mv;")
-    CARDS = cur.fetchall()    
+    CARDS = cur.fetchall()
 
-
-def globals_init() -> None:
-    conn, cur = db.db_instance()
-    load_enums(cur)
-    load_all_cards(cur)
+    # CLOSE DB
     cur.close()
     conn.close()    
 
@@ -38,6 +37,11 @@ def globals_init() -> None:
 def globals_get_cards() -> list[dict]:
     global CARDS
     return CARDS
+
+
+def globals_set_cards(cards: list[dict]) -> None:
+    global CARDS
+    CARDS = cards
 
 
 def globals_get_enums() -> dict:

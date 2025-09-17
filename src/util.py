@@ -1,6 +1,10 @@
+from fastapi.responses import JSONResponse
+from fastapi import status
 from pathlib import Path
+from src import globals
 from PIL import Image
 import requests
+import uuid
 import json
 import os
 
@@ -55,6 +59,8 @@ def delete_file(path: Path) -> None:
 
 def normalize_card_sort_by(sort_by: str) -> str:
     sort_by = sort_by.lower()
+    if sort_by == "random":
+        return "RANDOM()"
     if sort_by not in VALID_SORT_COLUMNS:
         sort_by = "name"
     return sort_by
@@ -67,7 +73,8 @@ def normalize_card_sets_sort_by(sort_by: str) -> str:
     return sort_by
 
 
-def normalize_sort_order(sort_order: str) -> str:
+def normalize_sort_order(sort_order: str, is_random: bool = False) -> str:
+    if is_random: return ''
     sort_order = sort_order.lower()
     if sort_order not in VALID_SORT_ORDERS:
         sort_order = "asc"
@@ -114,3 +121,31 @@ def load_ygoprodeck_cardsets() -> None:
     with open(f"tmp/cardsets.json", "w+") as file:
         json.dump(data, file, indent=4, sort_keys=True)
     return data
+
+
+def is_valid_enums(
+    archetype: str | None,
+    attribute: str | None,
+    frametype: str | None,
+    race: str | None,
+    type: str | None
+) -> JSONResponse | None:
+    enums: dict = globals.globals_get_enums()
+    if archetype and archetype not in enums['archetype']['set']:
+        return JSONResponse(content={'error': f'invalid archetype -> {archetype}'}, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    if attribute and attribute not in enums['attribute']['set']:
+        return JSONResponse(content={'error': f'invalid attribute -> {attribute}'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+    if frametype and frametype not in enums['frametype']['set']:
+        return JSONResponse(content={'error': f'invalid frametype -> {frametype}'}, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    if race and race not in enums['race']['set']:
+        return JSONResponse(content={'error': f'invalid race -> {race}'}, status_code=status.HTTP_400_BAD_REQUEST)
+    
+    if type and type not in enums['type']['set']:
+        return JSONResponse(content={'error': f'invalid type -> {type}'}, status_code=status.HTTP_400_BAD_REQUEST)
+    
+
+def generate_uuid(s: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, s))

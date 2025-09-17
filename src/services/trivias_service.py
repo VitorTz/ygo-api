@@ -10,9 +10,7 @@ def fetch_trivias(
     limit: int,
     offset: int
 ) -> JSONResponse:
-    
     total = db.db_count(cur, 'trivias')
-
     sort_by = "RANDOM()" if sort_by.lower() == 'random' else 't.trivia_id'
 
     cur.execute(
