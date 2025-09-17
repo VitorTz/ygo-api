@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS cards_in_sets (
     cards_in_set_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     card_id INT NOT NULL,
     card_set_id INTEGER NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
+    num_of_cards INTEGER,
+    CONSTRAINT cards_in_sets_unique_cstr UNIQUE (card_id, card_set_id),
     FOREIGN KEY (card_id) REFERENCES cards(card_id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (card_set_id) REFERENCES card_sets(card_set_id) ON DELETE CASCADE ON UPDATE CASCADE
 );

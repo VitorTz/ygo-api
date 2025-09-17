@@ -12,6 +12,7 @@ router = APIRouter()
 @router.get("/", response_model=CardSetPagination)
 async def get_sets(
     depends = Depends(db.get_db),
+    search: str | None = Query(None),
     limit: int = Query(64, ge=1, le=999),
     offset: int = Query(0, ge=0),
     sort_by: str = Query("card_set_code", description="sort by card_set_code, name or price"),
@@ -20,6 +21,7 @@ async def get_sets(
     cur: Cursor = depends.cursor()
     return sets_service.fetch_sets(
         cur, 
+        search,
         limit, 
         offset, 
         sort_by, 

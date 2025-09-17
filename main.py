@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
-from src.globals import globals_init
 from fastapi import FastAPI, status
+from src.globals import globals_init
 from src.routers import cards
 from src.routers import enums
 from src.routers import sets
 from src.routers import trivias
-from core import db
+from src.core import db
 
 
 @asynccontextmanager

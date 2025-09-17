@@ -144,3 +144,5 @@ CREATE INDEX IF NOT EXISTS idx_cards_mv_frametype ON cards_mv(frametype);
 CREATE INDEX IF NOT EXISTS idx_cards_mv_race ON cards_mv(race);
 
 CREATE INDEX IF NOT EXISTS idx_cards_mv_type ON cards_mv(type);
+
+REFRESH MATERIALIZED VIEW CONCURRENTLY cards_mv;

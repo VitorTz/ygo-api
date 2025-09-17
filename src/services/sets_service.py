@@ -7,6 +7,7 @@ from src.core import db
 
 def fetch_sets(
     cur: Cursor,
+    search: str | None,
     limit: int,
     offset: int,
     sort_by: str,
@@ -15,23 +16,28 @@ def fetch_sets(
     sort_order: str = util.normalize_sort_order(sort_order)
     sort_by: str = util.normalize_card_sets_sort_by(sort_by)
     total = db.db_count(cur, 'card_sets')    
-
+    where_clause = "WHERE set_name ILIKE %s" if search is not None else ''
+    if search is not None:
+        params = [f"%{search}%", limit, offset]
+    else:
+        params = [limit, offset]
     cur.execute(
         f"""
             SELECT 
                 set_name, 
                 set_code
                 num_of_cards,
-                tcg_date,
+                COALESCE(TO_CHAR(tcg_date, 'YYYY-MM-DD'), '') AS tcg_date,
                 set_image
             FROM 
                 card_sets
+            {where_clause}
             ORDER BY 
                 {sort_by} {sort_order}
             LIMIT %s
             OFFSET %s;
         """,
-        (limit, offset)
+        tuple(params)
     )
 
     response = {

@@ -4,7 +4,7 @@ from threading import Lock
 from pathlib import Path
 from src.s3 import YgoS3
 from src import util
-from core import db
+from src.core import db
 import json
 
 
@@ -28,13 +28,45 @@ def close_db() -> None:
     conn.close()
 
 
-def populate_cards() -> None:
-    print("[POPULATING CARDS]")
+def populate_enums() -> None:
+    print("[POPULATING ENUMS]")
     archetypes: set[str] = set()
-    params = []
+    attributes: set[str] = set()
+    frametypes: set[str] = set()
+    races: set[str] = set()
+    types: set[str] = set()
     for card in data:
         if card.get("archetype"):
             archetypes.add(card['archetype'])
+        if card.get("attribute"):
+            attributes.add(card['attribute'])
+        if card.get("frameType"):
+            frametypes.add(card['frameType'])
+        if card.get("race"):
+            races.add(card['race'])
+        if card.get("type"):
+            types.add(card['type'])
+
+    for archetype in archetypes:
+        db.db_add_enum_value_if_not_exists(conn, cur, 'archetype_enum', archetype)
+    
+    for attribute in attributes:
+        db.db_add_enum_value_if_not_exists(conn, cur, 'attribute_enum', attribute)
+    
+    for frametype in frametypes:
+        db.db_add_enum_value_if_not_exists(conn, cur, 'frametype_enum', frametype)
+    
+    for race in races:
+        db.db_add_enum_value_if_not_exists(conn, cur, 'race_enum', race)
+    
+    for card_type in types:
+        db.db_add_enum_value_if_not_exists(conn, cur, 'type_enum', card_type)
+        
+
+def populate_cards() -> None:
+    print("[POPULATING CARDS]")
+    params = []
+    for card in data:
         try:
             card_id: int = card['id']
             name: str = card['name'].strip()
@@ -77,11 +109,7 @@ def populate_cards() -> None:
         except Exception as e:
             print(f"[EXCEPTION populate_cards] | {e}")
             print(card)
-            return
-    
-    print("[UPDATING ARCHETYPES]")
-    for archetype in archetypes:
-        db.db_add_enum_value_if_not_exists(conn, cur, 'archetype_enum', archetype)
+            return    
 
     try:
         cur.executemany(
@@ -233,6 +261,52 @@ def populate_sets() -> None:
         conn.rollback()
 
 
+def populate_cards_in_sets() -> None:
+    print("[POPULATING CARDS IN SETS]")
+    r = {}
+    for card in data:
+        card_id: int = card['id']
+        card_sets = card.get("card_sets")
+        if card_sets is None: continue
+        for card_set in card_sets:
+            k = (card_id, card_set['set_name'].strip().lower())
+            r[k] = r.get(k, 0) + 1
+
+    cur.execute("SELECT set_name, card_set_id FROM card_sets;")
+    set_dict = {x['set_name'].strip().lower(): x['card_set_id'] for x in cur.fetchall()}
+
+    params = []
+    for k, v in r.items():
+        params.append((
+            k[0],
+            set_dict[k[1]],
+            v
+        ))
+
+    try:
+        cur.executemany(
+            """
+                INSERT INTO cards_in_sets (
+                    card_id,
+                    card_set_id,
+                    num_of_cards
+                )
+                VALUES 
+                    (%s, %s, %s)
+                ON CONFLICT
+                    (card_id, card_set_id)
+                DO UPDATE SET
+                    num_of_cards = EXCLUDED.num_of_cards;
+            """,
+            params
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[EXCEPTION populate_cards_in_sets] | {e}")
+        conn.rollback()
+
+
+
 def populate_card_prices() -> None:
     print("[POPULATING CARD PRICES]")
     params = []
@@ -350,7 +424,7 @@ def populate_banlist() -> None:
 
 
 def populate_trivias() -> None:
-    with open("res/api/trivias.json", "r") as file:
+    with open("db/trivias.json", "r") as file:
         trivias = json.load(file)
     
     params = []    
@@ -428,8 +502,10 @@ def populate_trivias() -> None:
 
 def main() -> None:
     init_db()
-    populate_cards()    
+    populate_enums()
+    populate_cards()
     populate_sets()
+    populate_cards_in_sets()
     populate_card_prices()
     populate_linkmarkers()
     populate_banlist()

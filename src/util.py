@@ -1,6 +1,5 @@
 from pathlib import Path
 from PIL import Image
-from datetime import datetime
 import requests
 import json
 import os
@@ -97,26 +96,21 @@ def extract_card_filters(locals: dict, search: str | None) -> str:
     return where_clause, params
 
 
-def clear_ygoprodeck_data_history() -> None:
-    path = Path("res")
-    for file in path.iterdir():
-        if file.is_file() and file.suffix == ".json":
-            os.remove(str(file))
-
-
 def load_ygoprodeck_data() -> None:
+    Path("tmp").mkdir(exist_ok=True)
     print(f"[REQUESTING YGO DATA]")
     r = requests.get("https://db.ygoprodeck.com/api/v7/cardinfo.php")
     data = r.json()['data']
-    with open(f"res/cards.json", "w+") as file:
+    with open(f"tmp/cards.json", "w+") as file:
         json.dump(data, file, indent=4, sort_keys=True)
     return data
 
 
 def load_ygoprodeck_cardsets() -> None:
+    Path("tmp").mkdir(exist_ok=True)
     print(f"[REQUESTING YGO CARD SET DATA]")
     r = requests.get("https://db.ygoprodeck.com/api/v7/cardsets.php")
     data = r.json()
-    with open(f"res/cardsets.json", "w+") as file:
+    with open(f"tmp/cardsets.json", "w+") as file:
         json.dump(data, file, indent=4, sort_keys=True)
     return data

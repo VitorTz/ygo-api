@@ -36,7 +36,7 @@ def fetch_cards(
 
     enums: dict = globals.globals_get_enums()
     sort_by = 'RANDOM()' if sort_by.lower() == 'random' else util.normalize_card_sort_by(sort_by)
-    sort_order = '' if sort_by.lower() else util.normalize_sort_order(sort_order)
+    sort_order = '' if sort_by.lower() == 'random' else util.normalize_sort_order(sort_order)
     where_clause, params = util.extract_card_filters(locals(), search) # archetype, attribute, race, type and frametype
 
     if archetype and archetype not in enums['archetype']['set']:
@@ -75,7 +75,7 @@ def fetch_cards(
                         COUNT(*) as total 
                     FROM 
                         cards_mv 
-                    {where_clause};
+                    {where_clause}
                 """, 
                 tuple(params)
             )
@@ -94,7 +94,7 @@ def fetch_cards(
                 cards_mv
             {where_clause}
             ORDER BY 
-                {sort_by} {sort_order} {"NULLS FIRST" if null_first else "NULLS LAST"}
+                {sort_by} {sort_order} {"NULLS FIRST" if null_first else "NULLS LAST"}, card_id ASC
             LIMIT %s 
             OFFSET %s;
         """
@@ -139,7 +139,7 @@ def fetch_cards(
             cards_mv
         {where_clause}
         ORDER BY 
-            {sort_by} {sort_order} {"NULLS FIRST" if null_first else "NULLS LAST"}
+            {sort_by} {sort_order} {"NULLS FIRST" if null_first else "NULLS LAST"}, card_id ASC
         LIMIT %s 
         OFFSET %s;
     """
