@@ -1,7 +1,7 @@
-from pydantic import BaseModel
-from src.schemas.card import Card
 from src.schemas.card_set import CardSet
 from src.schemas.trivia import Trivia
+from src.schemas.card import Card
+from pydantic import BaseModel
 from typing import List
 
 

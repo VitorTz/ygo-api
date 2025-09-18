@@ -174,7 +174,6 @@ def db_show_all(cur: Cursor, table: str) -> None:
     [print(i) for i in cur.fetchall()]
 
 
-
 def db_card_exists(cur: Cursor, card_id: int) -> bool:
     cur.execute("SELECT card_id FROM cards WHERE card_id = %s;", (card_id, ))
     r = cur.fetchone()

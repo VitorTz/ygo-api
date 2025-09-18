@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, status
 from src.globals import globals_init
+from fastapi import FastAPI, status
+from src.routers import trivias
 from src.routers import cards
 from src.routers import enums
 from src.routers import sets
-from src.routers import trivias
 from src.core import db
 
 

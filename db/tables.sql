@@ -1,6 +1,5 @@
 
 
-
 CREATE TABLE IF NOT EXISTS cards (
     card_id INT PRIMARY KEY NOT NULL,
     name citext NOT NULL,
