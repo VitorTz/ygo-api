@@ -117,6 +117,44 @@ END IF;
 END$$;
 
 
+DO $$
+BEGIN
+IF NOT EXISTS (
+    SELECT 1
+    FROM pg_matviews
+    WHERE matviewname = 'card_sets_mv'
+) THEN
+CREATE MATERIALIZED VIEW card_sets_mv AS
+SELECT    
+    cs.card_set_id,
+    cs.set_name,
+    cs.set_code,
+    cs.num_of_cards,
+    to_char(cs.tcg_date, 'YYYY-MM-DD') as tcg_date,
+    cs.set_image,
+    COALESCE(
+        (
+            SELECT json_agg(
+                json_build_object(
+                    'card', to_jsonb(c.*),
+                    'copies', cis.num_of_cards
+                )
+            )
+            FROM 
+                cards_in_sets cis
+            JOIN 
+                cards_mv c ON c.card_id = cis.card_id
+            WHERE 
+                cis.card_set_id = cs.card_set_id
+        ),
+        '[]'::json
+    ) AS cards
+FROM card_sets cs
+WITH DATA;
+END IF;
+END$$;
+
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_mv_card_id ON cards_mv(card_id);
 
 CREATE INDEX IF NOT EXISTS idx_cards_mv_name ON cards_mv(name);
@@ -145,4 +183,15 @@ CREATE INDEX IF NOT EXISTS idx_cards_mv_race ON cards_mv(race);
 
 CREATE INDEX IF NOT EXISTS idx_cards_mv_type ON cards_mv(type);
 
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_card_sets_mv_id ON card_sets_mv (card_set_id);
+
+CREATE INDEX IF NOT EXISTS idx_card_sets_mv_name ON card_sets_mv (set_name);
+
+CREATE INDEX IF NOT EXISTS idx_card_sets_mv_code ON card_sets_mv (set_code);
+
+CREATE INDEX IF NOT EXISTS idx_card_sets_mv_name_trgm ON card_sets_mv USING gin (set_name gin_trgm_ops);
+
+
 REFRESH MATERIALIZED VIEW CONCURRENTLY cards_mv;
+REFRESH MATERIALIZED VIEW CONCURRENTLY card_sets_mv;

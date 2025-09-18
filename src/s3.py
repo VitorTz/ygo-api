@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from botocore.config import Config
 from dotenv import load_dotenv
 from pathlib import Path
+from src import util
 import boto3
-import uuid
 import os
 
 
@@ -32,10 +32,7 @@ class S3Client(ABC):
     def __init__(self, prefix: str, bucket: str):
         self.__bucket = bucket
         self.__prefix = prefix
-        self.__s3 = S3
-
-    def generate_uuid(self, s: str) -> uuid.UUID:
-        return str(uuid.uuid5(uuid.NAMESPACE_DNS, s))
+        self.__s3 = S3    
 
     def upload(self, file: Path, name: str) -> str | None:
         if not file.exists() or not file.is_file():
@@ -74,6 +71,6 @@ class YgoS3(S3Client):
         super().__init__(bucket = os.getenv("R2_BUCKET_NAME"), prefix=os.getenv("R2_PREFIX"))
 
     def upload_card(self, card_id: int, type: str, file: Path) -> str | None:
-        name = f"ygo/cards/{type}/{str(card_id)[0]}/{card_id}-{self.generate_uuid(str(card_id))}{file.suffix}"
+        name = f"ygo/cards/{type}/{str(card_id)[0]}/{card_id}-{util.generate_uuid(str(card_id))}{file.suffix}"
         return self.upload(file, name)
     

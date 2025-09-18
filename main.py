@@ -17,7 +17,6 @@ async def lifespan(app: FastAPI):
     print("[FASTAPI CLOSE]")
 
 
-
 app = FastAPI(title="Yu-Gi-Oh! API", lifespan=lifespan)
 app.include_router(cards.router, prefix="/cards", tags=["cards"])
 app.include_router(enums.router, prefix="/enums", tags=["enums"])

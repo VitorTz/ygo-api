@@ -13,6 +13,8 @@ router = APIRouter()
 async def get_sets(
     depends = Depends(db.get_db),
     search: str | None = Query(None),
+    set_code: str = Query(None),
+    card_set_id: int | None = Query(None, ge=1),
     limit: int = Query(64, ge=1, le=999),
     offset: int = Query(0, ge=0),
     sort_by: str = Query("card_set_code", description="sort by card_set_code, name or price"),
@@ -22,6 +24,8 @@ async def get_sets(
     return sets_service.fetch_sets(
         cur, 
         search,
+        card_set_id,
+        set_code,
         limit, 
         offset, 
         sort_by, 
@@ -32,18 +36,22 @@ async def get_sets(
 @router.get("/cards", response_model=CardPagination)
 async def get_card_sets(
     depends = Depends(db.get_db),
-    set_name: str = Query(),
+    card_set_id: int | None = Query(None),
+    set_name: str | None = Query(None),
+    set_code: str | None = Query(None),
+    order_by: str = Query("set_name", description="order by set_name, num_of_cards or tcg_date"),
+    sort_order: str = Query("asc", description="ascending or descending order"),
     limit: int = Query(64, ge=1, le=999),
-    offset: int = Query(0, ge=0),
-    sort_by: str = Query("set_name", description="sort by set_name, num_of_cards or tcg_date"),
-    sort_order: str = Query("asc", description="ascending or descending order")
+    offset: int = Query(0, ge=0)
 ) -> JSONResponse:
     cur: Cursor = depends.cursor()
     return sets_service.fetch_set_cards(
-        cur, 
-        set_name, 
-        limit, 
-        offset, 
-        sort_by, 
-        sort_order
+        cur,
+        set_name,
+        card_set_id,
+        set_code,
+        order_by,
+        sort_order,
+        limit,
+        offset 
     )
