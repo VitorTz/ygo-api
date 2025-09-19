@@ -74,3 +74,7 @@ class YgoS3(S3Client):
         name = f"ygo/cards/{type}/{str(card_id)[0]}/{card_id}-{util.generate_uuid(str(card_id))}{file.suffix}"
         return self.upload(file, name)
     
+    def upload_set_image(self, file: Path) -> str | None:
+        name = f"ygo/sets/images/{util.generate_uuid(str(file))}{file.suffix}"
+        return self.upload(file, name)
+    

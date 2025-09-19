@@ -179,7 +179,7 @@ def fetch_set_cards(
                 card_sets_mv
             {where_clause}
             ORDER BY
-                {order_by} {sort_order}, card_set_id ASC
+                {order_by} {sort_order}, card_set_id
             LIMIT %s
             OFFSET %s;
         """,
