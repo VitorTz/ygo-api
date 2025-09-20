@@ -185,3 +185,13 @@ def db_count(cur: Cursor, table: str) -> int:
     r = cur.fetchone()
     if r: return r['total']
     return 0
+
+
+def db_refresh_cards_materialized_view(conn: Connection, cur: Cursor) -> None:
+    cur.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY cards_mv;")
+    conn.commit()
+
+
+def db_refresh_cards_sets_materialized_view(conn: Connection, cur: Cursor) -> None:
+    cur.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY card_sets_mv;")
+    conn.commit()

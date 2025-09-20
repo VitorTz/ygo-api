@@ -1,6 +1,12 @@
 from src.core import db
+from dotenv import load_dotenv
+import os
 
 
+load_dotenv()
+
+
+TOKEN = os.getenv("TOKEN")
 CARDS: list[dict] = []
 ENUMS: dict = {}
 
@@ -22,7 +28,7 @@ def globals_init() -> None:
         'attribute': {'set': set(attributes), 'list': attributes},
         'frametype': {'set': set(frametypes), 'list': frametypes},
         'race': {'set': set(races), 'list': races},
-        'type': {'types': set(types), 'list': types}
+        'type': {'set': set(types), 'list': types}
     }
 
     # CARDS
@@ -43,6 +49,10 @@ def globals_set_cards(cards: list[dict]) -> None:
     global CARDS
     CARDS = cards
 
+
+def globals_get_token() -> str:
+    global TOKEN
+    return TOKEN
 
 def globals_get_enums() -> dict:
     global ENUMS

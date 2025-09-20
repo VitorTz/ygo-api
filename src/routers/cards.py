@@ -1,10 +1,12 @@
-from src.services.cards_service import fetch_cards
+from src.services.cards_service import fetch_cards, delete_card_by_id, create_card_service
 from src.schemas.pagination import CardPagination
-from src.schemas.card import CardCreate
-from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, Response
+from fastapi import APIRouter, Depends, Query
+from src.schemas.card import CardCreate
+from src.globals import globals_get_token
+from fastapi import HTTPException
 from fastapi import status
-from psycopg import Cursor
+from psycopg import Cursor, Connection
 from src.core import db
 
 
@@ -48,6 +50,23 @@ async def get_cards(
 
 
 @router.post("/")
-def create_card(card: CardCreate):
-    print(card)
-    return Response(None, status.HTTP_201_CREATED)
+def create_card(card: CardCreate, token: str = Query(), depends=Depends(db.get_db)):
+    if token != globals_get_token():
+        return Response("Now allowed", status.HTTP_401_UNAUTHORIZED)
+    conn: Connection = depends
+    cur: Cursor = conn.cursor()
+    return create_card_service(conn, cur, card)
+
+
+@router.delete("/")
+def delete_card(
+    card_id: int = Query(),
+    token: str = Query(),
+    depends=Depends(db.get_db)
+) -> Response:
+    if token != globals_get_token():
+        return Response("Now allowed", status.HTTP_401_UNAUTHORIZED)
+    conn: Connection = depends
+    cur: Cursor = conn.cursor()
+    return delete_card_by_id(conn, cur, card_id)
+    

@@ -1,4 +1,5 @@
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from fastapi.exceptions import HTTPException
 from fastapi import status
 from pathlib import Path
 from src import globals
@@ -129,22 +130,22 @@ def is_valid_enums(
     frametype: str | None,
     race: str | None,
     type: str | None
-) -> JSONResponse | None:
+) -> HTTPException | None:
     enums: dict = globals.globals_get_enums()
     if archetype and archetype not in enums['archetype']['set']:
-        return JSONResponse(content={'error': f'invalid archetype -> {archetype}'}, status_code=status.HTTP_400_BAD_REQUEST)
+        return Response(content=f'invalid archetype -> {archetype}', status_code=status.HTTP_400_BAD_REQUEST)
     
     if attribute and attribute not in enums['attribute']['set']:
-        return JSONResponse(content={'error': f'invalid attribute -> {attribute}'}, status_code=status.HTTP_400_BAD_REQUEST)
+        return Response(content=f'invalid attribute -> {attribute}', status_code=status.HTTP_400_BAD_REQUEST)
 
     if frametype and frametype not in enums['frametype']['set']:
-        return JSONResponse(content={'error': f'invalid frametype -> {frametype}'}, status_code=status.HTTP_400_BAD_REQUEST)
+        return Response(content=f'invalid frametype -> {frametype}', status_code=status.HTTP_400_BAD_REQUEST)
     
     if race and race not in enums['race']['set']:
-        return JSONResponse(content={'error': f'invalid race -> {race}'}, status_code=status.HTTP_400_BAD_REQUEST)
+        return Response(content=f'invalid race -> {race}', status_code=status.HTTP_400_BAD_REQUEST)
     
     if type and type not in enums['type']['set']:
-        return JSONResponse(content={'error': f'invalid type -> {type}'}, status_code=status.HTTP_400_BAD_REQUEST)
+        return Response(content=f'invalid type -> {type}', status_code=status.HTTP_400_BAD_REQUEST)
     
 
 def generate_uuid(s: str) -> str:

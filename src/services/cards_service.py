@@ -1,6 +1,8 @@
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from fastapi.exceptions import HTTPException
+from src.schemas.card import CardCreate
 from fastapi import status
-from psycopg import Cursor
+from psycopg import Cursor, Connection
 from src.core import db
 from src import globals
 from src import util
@@ -191,6 +193,7 @@ def fetch_cards(
         race,
         type
     )
+
     if enums_response is not None:
         return enums_response
     
@@ -224,3 +227,78 @@ def fetch_cards(
         sort_order,
         null_first
     )
+
+
+def create_card_service(conn: Connection, cur: Cursor, card: CardCreate) -> Response | HTTPException:
+    cur.execute("SELECT card_id FROM cards WHERE card_id = %s;", (card.card_id, ))
+    r = cur.fetchone()
+    if r is not None:
+        return Response(status_code=status.HTTP_409_CONFLICT)
+    
+    enums_response: JSONResponse | None = util.is_valid_enums(
+        card.archetype,
+        card.attribute,
+        card.frametype,
+        card.race,
+        card.type
+    )
+    
+    if enums_response is not None:
+        return enums_response    
+    
+    try:
+        cur.execute(
+            """
+                INSERT INTO cards (
+                    card_id,
+                    name,
+                    descr,
+                    pend_descr,
+                    monster_descr,
+                    attack,
+                    defence,
+                    level,
+                    archetype,
+                    attribute,
+                    frametype,
+                    race,
+                    type
+                )
+                VALUES 
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT
+                    (card_id)
+                DO NOTHING;
+            """,
+            (
+                card.card_id,
+                card.name,
+                card.descr,
+                card.pend_descr,
+                card.monster_descr,
+                card.attack,
+                card.defence,
+                card.level,
+                card.archetype,
+                card.attribute,
+                card.frametype,
+                card.race,
+                card.type
+            )
+        )
+        conn.commit()
+        return Response(status_code=status.HTTP_201_CREATED)
+    except Exception as e:
+        conn.rollback()
+        print(f"[EXCEPTION create_card_service] |{e}")
+        return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def delete_card_by_id(conn: Connection, cur: Cursor, card_id: int) -> Response | HTTPException:
+    try:
+        cur.execute("DELETE FROM cards WHERE card_id = %s;", (card_id, ))
+        conn.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        print(f"[EXCEPTION delete_card] | {card_id} | {e}")
+        return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)

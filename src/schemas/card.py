@@ -44,4 +44,3 @@ class CardCreate(BaseModel):
     frametype: str
     race: Optional[str] = None
     type: Optional[str] = None
-    images: List[str]
