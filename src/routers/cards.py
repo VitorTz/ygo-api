@@ -1,7 +1,9 @@
 from src.services.cards_service import fetch_cards
 from src.schemas.pagination import CardPagination
+from src.schemas.card import CardCreate
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from fastapi import status
 from psycopg import Cursor
 from src.core import db
 
@@ -43,3 +45,9 @@ async def get_cards(
         attribute, 
         frametype
     )
+
+
+@router.post("/")
+def create_card(card: CardCreate):
+    print(card)
+    return Response(None, status.HTTP_201_CREATED)

@@ -27,3 +27,21 @@ class Card(BaseModel):
     banlists: List[Banlist]
     images: List[Image]
     card_prices: List[CardPrice]
+
+
+class CardCreate(BaseModel):
+    
+    card_id: int
+    name: str
+    descr: str
+    pend_descr: Optional[str] = None
+    monster_descr: Optional[str] = None
+    attack: Optional[int] = None
+    defence: Optional[int] = None
+    level: Optional[int] = None
+    archetype: str
+    attribute: Optional[str] = None
+    frametype: str
+    race: Optional[str] = None
+    type: Optional[str] = None
+    images: List[str]
